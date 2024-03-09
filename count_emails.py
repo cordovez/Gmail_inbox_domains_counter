@@ -6,89 +6,16 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import timeit
+import time
+import json
+import re
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-domains_count = {}
 
-
-def extract_domain(sender: str) -> str:
-    _, domain = sender.split("@", 1)
-    return f"@{domain}"
-
-
-def get_senders(creds) -> list:
-    senders = []
-    try:
-        # Call the Gmail API
-        service = build("gmail", "v1", credentials=creds)
-
-        # Initialize the page token to None
-        page_token = None
-
-        while True:
-            # Request a page of messages
-            results = (
-                service.users()
-                .messages()
-                .list(userId="me", pageToken=page_token)
-                .execute()
-            )
-            messages = results.get("messages", [])
-
-            if not messages:
-                print("No more messages found.")
-                break
-
-            for message in messages:
-                # Get the sender from each message
-                result = (
-                    service.users()
-                    .messages()
-                    .get(userId="me", id=message["id"])
-                    .execute()
-                )
-                if "INBOX" in result["labelIds"]:
-                    # Find the 'From' header and extract the sender
-                    sender_info = next(
-                        (
-                            header
-                            for header in result["payload"]["headers"]
-                            if header["name"] == "From"
-                        ),
-                        None,
-                    )
-                    if sender_info:
-                        sender = sender_info["value"]
-                        domain = extract_domain(sender)
-                        senders.append(domain)
-                        domains_count[domain.rstrip(">")] = (
-                            domains_count.get(domain, 0) + 1
-                        )
-
-            # Get the next page token
-            page_token = results.get("nextPageToken")
-
-            # Break the loop if there are no more pages
-            if not page_token:
-                break
-
-        sorted_domains_count = OrderedDict(
-            sorted(domains_count.items(), key=lambda x: x[1], reverse=True)
-        )
-        return sorted_domains_count
-
-    except HttpError as error:
-        # TODO(developer) - Handle errors from Gmail API.
-        print(f"An error occurred: {error}")
-
-
-def main():
-    """
-    Lists the user's email domains for items in the inbox, with the respective count.
-    """
+def establish_credentials():
+    """Establish credentials and Call the GMAIL API"""
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -105,20 +32,112 @@ def main():
         # Save the credentials for the next run
         with open("token.json", "w") as token:
             token.write(creds.to_json())
+    return creds
 
-    senders = get_senders(creds)
-    with open("token.json", "w") as token:
-            token.∏rite(creds.to_json())
-            
-            
-    execution_time = timeit.timeit(
-        stmt="get_senders(creds)",  # Function call to be timed
-        setup="from __main__ import get_senders, creds",  # Import necessary functions and variables
-        number=1,  # Execute the statement once
-    )
-    print(f"Execution time: {execution_time} seconds")
-    pprint(senders)
+
+def define_gmail_service(creds):
+    return build("gmail", "v1", credentials=creds)
+
+
+def save_to_file(data):
+    with open("domain_count.json", "w") as document:
+        json.dump(data, document)
+
+
+def extract_domain(sender: str) -> str:
+    match = re.search(r"<([^>]+)>", sender)
+    if match:
+        domain = match.group(1)
+        return domain
+    else:
+        return ""
+
+
+# def extract_domain(sender: str) -> str:
+#     _, domain = sender.split("@", 1)
+#     return f"@{domain}"
+
+
+def get_message_ids(service) -> list:
+    try:
+        # Initialize the page token to None
+        page_token = None
+        messages = []
+        while True:
+            # Request a page of messages
+            results = (
+                service.users()
+                .messages()
+                .list(userId="me", labelIds=["INBOX"], pageToken=page_token)
+                .execute()
+            )
+            messages.extend(results.get("messages", []))
+
+            # Get the next page token
+            page_token = results.get("nextPageToken")
+
+            # Break the loop if there are no more pages
+            if not page_token:
+                break
+
+        return messages
+
+    except HttpError as error:
+        # TODO(developer) - Handle errors from Gmail API.
+        print(f"An error occurred: {error}")
+
+
+def count_domain_messages(messages, service):
+    domains_count = {}
+
+    for message in messages:
+        # Get the sender from each message
+        result = service.users().messages().get(userId="me", id=message["id"]).execute()
+
+        if sender_info := next(
+            (
+                header
+                for header in result["payload"]["headers"]
+                if header["name"] == "From"
+            ),
+            None,
+        ):
+            # sender = sender_info["value"]
+            # domain = extract_domain(sender)
+            # domains_count[sender] = domains_count.get(sender, 0) + 1
+            sender = sender_info["value"]
+            domain = extract_domain(sender)
+            domains_count[domain.rstrip(">")] = domains_count.get(domain, 0) + 1
+
+    return OrderedDict(sorted(domains_count.items(), key=lambda x: x[1], reverse=True))
+
+
+def main():
+    """
+    Lists the user's email domains for items in the inbox, with the respective count.
+    """
+    credentials = establish_credentials()
+    service = define_gmail_service(credentials)
+
+    messages = get_message_ids(service)
+    final_count = count_domain_messages(messages, service)
+
+    save_to_file(final_count)
+
+    print("File has been created")
+    print(f"{len(messages)}  where in the inbox")
+    # result = (
+    #     service.users().messages().get(userId="me", id="18e1a0802be94aac").execute()
+    # )
+    # pprint(result)
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     main()
+    end_time = time.time()
+    execution_time = end_time - start_time
+    minutes = int(execution_time // 60)  # Get the whole number of minutes
+    seconds = int(execution_time % 60)  # Get the remaining seconds
+
+    print(f"Execution time: {minutes} minutes {seconds} seconds")
