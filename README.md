@@ -4,7 +4,9 @@ Script to count how many emails from a given sender are in my inbox ... in order
 ## To use
 Clone me: `git@github.com:cordovez/Gmail_inbox_domains_counter.git`
 
-To use the script, you must have a Gmail address (obviously), and a Google Developer account from whence you can get an API Key and set up the OAuth. The result is a json document that you must download into the root folder of the project you've just cloned. [This is they Python guide for this process](https://developers.google.com/gmail/api/quickstart/python).
+There are two scripts, `count_emails.py` and `count_unread.py`. The former counts *all* senders in the inbox, the latter counts only *unread* senders in the inbox. 
+
+To use eihter script, you must have a Gmail address (obviously), and a Google Developer account from whence you can get an API Key and set up the OAuth. The result is a json document that you must download into the root folder of the project you've just cloned. [This is they Python guide for this process](https://developers.google.com/gmail/api/quickstart/python).
 
 make sure you create a virtual env and activate it before pip installing the Google library as indicated in their instructions
 

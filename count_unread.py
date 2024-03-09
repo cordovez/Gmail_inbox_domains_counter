@@ -40,14 +40,15 @@ def define_gmail_service(creds):
 
 
 def save_to_file(data):
-    with open("domain_count.json", "w") as document:
+    with open("unread_count.json", "w") as document:
         json.dump(data, document)
 
 
 def extract_domain(sender: str) -> str:
+    # sourcery skip: assign-if-exp, inline-immediately-returned-variable, use-named-expression
     match = re.search(r"<([^>]+)>", sender)
     if match:
-        domain = match.group(1)
+        domain = match[1]
         return domain
     else:
         return ""
@@ -68,7 +69,7 @@ def get_message_ids(service) -> list:
             results = (
                 service.users()
                 .messages()
-                .list(userId="me", labelIds=["INBOX"], pageToken=page_token)
+                .list(userId="me", labelIds=["UNREAD"], pageToken=page_token)
                 .execute()
             )
             messages.extend(results.get("messages", []))
